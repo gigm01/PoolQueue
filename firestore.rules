@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Venues are public (location of venue is fine)
+    match /venues/{venueId} {
+      allow read: if true;
+      // deny client writes to venue location; only admins or server functions should manage venues
+      allow write: if false;
+    }
+
+    // Aggregated stats for venues (counts) are public
+    match /venueStats/{venueId} {
+      allow read: if true;
+      // prevent clients from altering aggregated counts
+      allow write: if false;
+    }
+
+    // Regional leaderboards are public read-only
+    match /leaderboards/{region} {
+      allow read: if true;
+      // only server/admin should write leaderboard documents
+      allow write: if false;
+    }
+
+    // Users collection: allow users to read/write their own public profile fields
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == userId && !(
+        // clients may not set private fields directly
+        'private' in request.resource.data
+      );
+      allow create: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Private presence data stored under users/{uid}/private should not be readable by others
+    match /users/{userId}/private/{docId} {
+      // only the owner can read their private subcollection
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Default: disallow writes to any other top-level collections from clients
+    match /{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+  }
+}
